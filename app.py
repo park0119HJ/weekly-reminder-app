@@ -1,97 +1,76 @@
 from flask import Flask, render_template, request, redirect
+import datetime
 import sqlite3
-from datetime import datetime, timedelta
 
 app = Flask(__name__)
 
-# DB 초기화
+def get_week_info(target_date=None):
+    if target_date is None:
+        target_date = datetime.date.today()
+    year = target_date.year
+    month = target_date.month
+    day = target_date.day
+
+    first_day_of_month = datetime.date(year, month, 1)
+    first_weekday = first_day_of_month.weekday()  # 월:0 ~ 일:6
+
+    if first_weekday < 3:
+        prev_month = month - 1 if month > 1 else 12
+        prev_year = year if month > 1 else year - 1
+        return f"{prev_year}년 {prev_month}월 마지막주"
+    else:
+        week_number = (day + first_weekday - 1) // 7 + 1
+        return f"{year}년 {month}월 {week_number}주"
+
 def init_db():
     conn = sqlite3.connect('database.db')
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS schedule 
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                  week TEXT, 
-                  day TEXT, 
-                  category TEXT,
-                  content TEXT,
-                  date TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
+    c.execute('''CREATE TABLE IF NOT EXISTS schedule (week TEXT, category TEXT, mon TEXT, tue TEXT, wed TEXT, thu TEXT, fri TEXT)''')
     conn.commit()
     conn.close()
 
-init_db()
-
-# 주차 리스트 생성 함수 (오늘 포함 + 이후 4주)
-def generate_weeks():
-    today = datetime.now()
-    weeks = []
-    for i in range(5):
-        target_date = today + timedelta(weeks=i)
-        month = target_date.month
-        week_num = (target_date.day - 1) // 7 + 1
-        weeks.append(f"{month}월 {week_num}주")
-    return weeks
-
-# 요일 + 날짜 리스트 생성
-def generate_days_with_date():
-    today = datetime.now()
-    days_kor = ["월", "화", "수", "목", "금"]
-    days = []
-
-    for i, d in enumerate(days_kor):
-        target_date = today + timedelta(days=(i - today.weekday() + 0 if today.weekday() <= i else 7 + i - today.weekday()))
-        days.append(f"{d} ({target_date.month}/{target_date.day})")
-    
-    return days, days_kor  # 표시용, DB용
-
-# 선생님 입력
-@app.route('/teacher', methods=['GET', 'POST'])
-def teacher():
-    weeks = generate_weeks()
-    display_days, db_days = generate_days_with_date()
-
-    if request.method == 'POST':
-        week = request.form['week']
-        conn = sqlite3.connect('database.db')
-        c = conn.cursor()
-
-        for day in db_days:
-            homework = request.form.get(f"{day}_homework", "").strip()
-            material = request.form.get(f"{day}_material", "").strip()
-
-            if homework:
-                c.execute("INSERT INTO schedule (week, day, category, content) VALUES (?, ?, ?, ?)", 
-                          (week, day, "숙제", homework))
-
-            if material:
-                c.execute("INSERT INTO schedule (week, day, category, content) VALUES (?, ?, ?, ?)", 
-                          (week, day, "준비물", material))
-
-        conn.commit()
-        conn.close()
-        return redirect('/teacher')
-
-    return render_template('teacher_write_table.html', weeks=weeks, display_days=display_days, db_days=db_days)
-
-# 학부모 페이지
-@app.route('/')
-def parent():
-    weeks = generate_weeks()
-    selected_week = request.args.get('week', weeks[0])
-
+@app.route("/")
+def parent_view():
     conn = sqlite3.connect('database.db')
     c = conn.cursor()
-    c.execute("SELECT day, category, content FROM schedule WHERE week = ? ORDER BY day", (selected_week,))
-    items = c.fetchall()
+    c.execute("SELECT * FROM schedule ORDER BY ROWID DESC LIMIT 2")
+    rows = c.fetchall()
     conn.close()
+    return render_template("parent_view.html", rows=rows)
 
-    data = {}
-    for day, category, content in items:
-        if day not in data:
-            data[day] = {"숙제": [], "준비물": []}
-        data[day][category].append(content)
+@app.route("/teacher", methods=["GET", "POST"])
+def teacher():
+    init_db()
+    weeks = [get_week_info()]
 
-    return render_template('parent_view.html', week=selected_week, weeks=weeks, data=data)
+    if request.method == "POST":
+        week = request.form.get("week")
+        homework = {
+            'mon': request.form.get("homework_mon"),
+            'tue': request.form.get("homework_tue"),
+            'wed': request.form.get("homework_wed"),
+            'thu': request.form.get("homework_thu"),
+            'fri': request.form.get("homework_fri"),
+        }
+        prepare = {
+            'mon': request.form.get("prepare_mon"),
+            'tue': request.form.get("prepare_tue"),
+            'wed': request.form.get("prepare_wed"),
+            'thu': request.form.get("prepare_thu"),
+            'fri': request.form.get("prepare_fri"),
+        }
+
+        conn = sqlite3.connect('database.db')
+        c = conn.cursor()
+        c.execute("DELETE FROM schedule")
+        c.execute("INSERT INTO schedule VALUES (?, ?, ?, ?, ?, ?, ?)", (week, '숙제', homework['mon'], homework['tue'], homework['wed'], homework['thu'], homework['fri']))
+        c.execute("INSERT INTO schedule VALUES (?, ?, ?, ?, ?, ?, ?)", (week, '준비물', prepare['mon'], prepare['tue'], prepare['wed'], prepare['thu'], prepare['fri']))
+        conn.commit()
+        conn.close()
+
+        return redirect("/teacher")
+
+    return render_template("teacher_write.html", weeks=weeks)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
-
