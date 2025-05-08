@@ -1,114 +1,134 @@
 from flask import Flask, render_template, request, redirect
-import datetime
 import sqlite3
+from datetime import datetime, timedelta
+import calendar
 
 app = Flask(__name__)
 
-days_kor = ['월', '화', '수', '목', '금']
-
-def get_week_info(target_date=None):
-    if target_date is None:
-        target_date = datetime.date.today()
-    year = target_date.year
-    month = target_date.month
-    day = target_date.day
-
-    first_day_of_month = datetime.date(year, month, 1)
-    first_weekday = first_day_of_month.weekday()
-
-    if first_weekday < 3:
-        prev_month = month - 1 if month > 1 else 12
-        prev_year = year if month > 1 else year - 1
-        return f"{prev_year}-{str(prev_month).zfill(2)}-last"
-    else:
-        week_number = (day + first_weekday - 1) // 7 + 1
-        return f"{year}-{str(month).zfill(2)}-{week_number}"
-
-def get_week_dates(year, month, week_num):
-    first_day = datetime.date(year, month, 1)
-    first_day_weekday = first_day.weekday()
-
-    if first_day_weekday == 0:
-        first_monday = first_day
-    else:
-        first_monday = first_day + datetime.timedelta(days=(7 - first_day_weekday))
-
-    target_monday = first_monday + datetime.timedelta(weeks=week_num - 1)
-    return [(target_monday + datetime.timedelta(days=i)) for i in range(5)]
+def get_connection():
+    conn = sqlite3.connect("database.db")
+    conn.row_factory = sqlite3.Row
+    return conn
 
 def init_db():
-    conn = sqlite3.connect('database.db')
+    conn = get_connection()
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS schedule (
+
+    # 반 테이블 생성
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS classes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT
+    )
+    """)
+
+    # 주간 학습안내 테이블 생성
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS weekly_schedule (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        class_id INTEGER,
         week TEXT,
         day TEXT,
         date TEXT,
-        category TEXT,
+        type TEXT,
         content TEXT,
         status TEXT
-    )''')
+    )
+    """)
+
+    # 반 데이터가 없으면 자동 추가
+    c.execute("SELECT COUNT(*) FROM classes")
+    if c.fetchone()[0] == 0:
+        classes = ['이삭반', '요엘반', '요셉반', '다니엘반', '여호수아반']
+        for class_name in classes:
+            c.execute("INSERT INTO classes (name) VALUES (?)", (class_name,))
     conn.commit()
     conn.close()
 
-@app.route("/")
-def parent_view():
-    conn = sqlite3.connect('database.db')
-    c = conn.cursor()
-    c.execute("SELECT * FROM schedule WHERE status='published' ORDER BY week, day")
-    rows = c.fetchall()
+def get_classes():
+    init_db()
+    conn = get_connection()
+    classes = conn.execute("SELECT * FROM classes").fetchall()
     conn.close()
-    return render_template("parent_view.html", rows=rows)
+    return classes
+
+def get_weeks():
+    now = datetime.now()
+    weeks = []
+    first = datetime(now.year, now.month, 1)
+
+    for i in range(6):
+        week_start = first + timedelta(days=i * 7)
+        if week_start.month != now.month:
+            continue
+        week_number = calendar.monthcalendar(week_start.year, week_start.month)[i]
+        if week_number[3] != 0:
+            week_label = f"{week_start.month}월 {i + 1}주"
+        else:
+            week_label = f"{week_start.month-1}월 마지막주"
+        weeks.append(week_label)
+    return weeks
+
+def get_dates(week_label):
+    year = datetime.now().year
+    month, week_num = map(int, week_label.replace("월", "").replace("주", "").split())
+    cal = calendar.monthcalendar(year, month)
+
+    if "마지막" in week_label:
+        target_week = cal[-1]
+    else:
+        target_week = cal[week_num - 1]
+
+    dates = []
+    for day in target_week[0:5]:
+        if day == 0:
+            dates.append("")
+        else:
+            dates.append(datetime(year, month, day))
+    return dates
 
 @app.route("/teacher", methods=["GET", "POST"])
 def teacher():
-    init_db()
-    now = datetime.date.today()
-    year = now.year
-    month = now.month
+    classes = get_classes()
+    class_id = request.args.get("class_id")
+    if not class_id:
+        return render_template("select_class.html", classes=classes)
 
-    first_day = datetime.date(year, month, 1)
-    first_weekday = first_day.weekday()
-    current_week = (now.day + first_weekday - 1) // 7 + 1
-
-    weeks = [f"{year}-{str(month).zfill(2)}-{i}" for i in range(1, 6)]
-
-    selected_week = request.args.get("week") or get_week_info()
+    week = request.args.get("week") or get_weeks()[0]
 
     if request.method == "POST":
-        week = request.form.get("week")
-        status = request.form.get("status")
-        conn = sqlite3.connect('database.db')
-        c = conn.cursor()
+        conn = get_connection()
+        conn.execute("DELETE FROM weekly_schedule WHERE class_id = ? AND week = ?", (class_id, week))
 
-        # 기존 데이터 삭제
-        c.execute("DELETE FROM schedule WHERE week=?", (week,))
-
-        # 데이터 삽입
-        for idx, day in enumerate(days_kor):
-            date = request.form.get(f"date_{day}")
-            homework = request.form.get(f"homework_{day}")
-            prepare = request.form.get(f"prepare_{day}")
-
-            c.execute("INSERT INTO schedule VALUES (?, ?, ?, ?, ?, ?)", (week, day, date, '숙제', homework, status))
-            c.execute("INSERT INTO schedule VALUES (?, ?, ?, ?, ?, ?)", (week, day, date, '준비물', prepare, status))
-
+        for i, day in enumerate(["월", "화", "수", "목", "금"]):
+            conn.execute("INSERT INTO weekly_schedule (class_id, week, day, date, type, content, status) VALUES (?, ?, ?, ?, ?, ?, ?)", 
+                         (class_id, week, day, request.form.get(f"date_{day}"), "숙제", request.form.get(f"homework_{day}"), request.form.get("status")))
+            conn.execute("INSERT INTO weekly_schedule (class_id, week, day, date, type, content, status) VALUES (?, ?, ?, ?, ?, ?, ?)", 
+                         (class_id, week, day, request.form.get(f"date_{day}"), "준비물", request.form.get(f"prepare_{day}"), request.form.get("status")))
         conn.commit()
         conn.close()
-        return redirect(f"/teacher?week={week}")
+        return redirect(f"/teacher?class_id={class_id}&week={week}")
 
-    # 불러오기
-    conn = sqlite3.connect('database.db')
-    c = conn.cursor()
-    c.execute("SELECT * FROM schedule WHERE week=?", (selected_week,))
-    rows = c.fetchall()
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM weekly_schedule WHERE class_id = ? AND week = ?", (class_id, week)).fetchall()
     conn.close()
 
-    dates = []
-    if "last" not in selected_week:
-        y, m, w = map(int, selected_week.split("-"))
-        dates = get_week_dates(y, m, w)
+    dates = get_dates(week)
 
-    return render_template("teacher_write.html", weeks=weeks, selected_week=selected_week, dates=dates, rows=rows)
+    return render_template("teacher_write_table.html", classes=classes, class_id=class_id, weeks=get_weeks(), selected_week=week, dates=dates, rows=rows)
+
+@app.route("/", methods=["GET"])
+def parent():
+    classes = get_classes()
+    class_id = request.args.get("class_id")
+    if not class_id:
+        return render_template("select_class.html", classes=classes)
+
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM weekly_schedule WHERE class_id = ? AND status = 'published'", (class_id,)).fetchall()
+    conn.close()
+
+    return render_template("parent_view.html", rows=rows, classes=classes, class_id=class_id)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)

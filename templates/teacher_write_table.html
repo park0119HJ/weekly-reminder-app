@@ -8,14 +8,21 @@
     <h1>주간 학습안내 입력</h1>
 
     <form method="post">
+        <h3>반: 
+            {% for c in classes %}
+                {% if c['id']|string == class_id %}
+                    {{ c['name'] }}
+                {% endif %}
+            {% endfor %}
+        </h3>
+
         <label>주차 선택:</label>
-        <select name="week" onchange="location.href='/teacher?week=' + this.value;">
+        <select name="week" onchange="location.href='/teacher?class_id={{ class_id }}&week=' + this.value;">
             {% for week in weeks %}
             <option value="{{ week }}" {% if week == selected_week %}selected{% endif %}>{{ week }}</option>
             {% endfor %}
         </select>
 
-        <h2>{{ selected_week }} 주차 (월~금)</h2>
         <table border="1">
             <tr>
                 <th>요일</th>
@@ -26,9 +33,9 @@
             {% for i in range(5) %}
             <tr>
                 <td>{{ ["월","화","수","목","금"][i] }}</td>
-                <td><input type="text" name="date_{{ ["월","화","수","목","금"][i] }}" value="{{ dates[i].strftime('%m/%d') if dates else '' }}" readonly></td>
-                <td><input type="text" name="homework_{{ ["월","화","수","목","금"][i] }}" value="{% for row in rows %}{% if row[1] == ["월","화","수","목","금"][i] and row[3] == '숙제' %}{{ row[4] }}{% endif %}{% endfor %}"></td>
-                <td><input type="text" name="prepare_{{ ["월","화","수","목","금"][i] }}" value="{% for row in rows %}{% if row[1] == ["월","화","수","목","금"][i] and row[3] == '준비물' %}{{ row[4] }}{% endif %}{% endfor %}"></td>
+                <td><input type="text" name="date_{{ ["월","화","수","목","금"][i] }}" value="{{ dates[i].strftime('%m/%d') if dates[i] else '' }}" readonly></td>
+                <td><input type="text" name="homework_{{ ["월","화","수","목","금"][i] }}" value="{% for row in rows %}{% if row['day'] == ["월","화","수","목","금"][i] and row['type'] == '숙제' %}{{ row['content'] }}{% endif %}{% endfor %}"></td>
+                <td><input type="text" name="prepare_{{ ["월","화","수","목","금"][i] }}" value="{% for row in rows %}{% if row['day'] == ["월","화","수","목","금"][i] and row['type'] == '준비물' %}{{ row['content'] }}{% endif %}{% endfor %}"></td>
             </tr>
             {% endfor %}
         </table>

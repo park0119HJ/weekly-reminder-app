@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>반 선택</title>
+</head>
+<body>
+    <h1>반 선택</h1>
+    <ul>
+    {% for c in classes %}
+        <li><a href="?class_id={{ c['id'] }}">{{ c['name'] }}</a></li>
+    {% endfor %}
+    </ul>
+</body>
+</html>
