@@ -2,20 +2,19 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>학부모 확인 화면</title>
+    <title>학부모 보기 화면</title>
 </head>
 <body>
-    <h1>주간 학습 안내</h1>
+    <h1>주간 학습안내</h1>
+
     {% if rows %}
-        <h2>{{ rows[0][0] }}</h2>
+        <h2>{{ rows[0][0] }} 주차 안내</h2>
         <table border="1">
             <tr>
-                <th>구분 / 요일</th>
-                <th>월</th>
-                <th>화</th>
-                <th>수</th>
-                <th>목</th>
-                <th>금</th>
+                <th>요일</th>
+                <th>날짜</th>
+                <th>구분</th>
+                <th>내용</th>
             </tr>
             {% for row in rows %}
             <tr>
@@ -23,13 +22,12 @@
                 <td>{{ row[2] }}</td>
                 <td>{{ row[3] }}</td>
                 <td>{{ row[4] }}</td>
-                <td>{{ row[5] }}</td>
-                <td>{{ row[6] }}</td>
             </tr>
             {% endfor %}
         </table>
     {% else %}
-        <p>등록된 학습 안내가 없습니다.</p>
+        <p>아직 배포된 주간학습안내가 없습니다.</p>
     {% endif %}
+
 </body>
 </html>

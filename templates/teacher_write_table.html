@@ -5,44 +5,37 @@
     <title>선생님 입력 화면</title>
 </head>
 <body>
-    <h1>주간 학습 안내 입력</h1>
+    <h1>주간 학습안내 입력</h1>
+
     <form method="post">
         <label>주차 선택:</label>
-        <select name="week">
+        <select name="week" onchange="location.href='/teacher?week=' + this.value;">
             {% for week in weeks %}
-            <option value="{{ week }}">{{ week }}</option>
+            <option value="{{ week }}" {% if week == selected_week %}selected{% endif %}>{{ week }}</option>
             {% endfor %}
         </select>
 
-        <h2>숙제 입력</h2>
+        <h2>{{ selected_week }} 주차 (월~금)</h2>
         <table border="1">
             <tr>
-                <th>구분 / 요일</th>
-                <th>월</th>
-                <th>화</th>
-                <th>수</th>
-                <th>목</th>
-                <th>금</th>
+                <th>요일</th>
+                <th>날짜</th>
+                <th>숙제</th>
+                <th>준비물</th>
             </tr>
+            {% for i in range(5) %}
             <tr>
-                <td>숙제</td>
-                <td><input type="text" name="homework_mon"></td>
-                <td><input type="text" name="homework_tue"></td>
-                <td><input type="text" name="homework_wed"></td>
-                <td><input type="text" name="homework_thu"></td>
-                <td><input type="text" name="homework_fri"></td>
+                <td>{{ ["월","화","수","목","금"][i] }}</td>
+                <td><input type="text" name="date_{{ ["월","화","수","목","금"][i] }}" value="{{ dates[i].strftime('%m/%d') if dates else '' }}" readonly></td>
+                <td><input type="text" name="homework_{{ ["월","화","수","목","금"][i] }}" value="{% for row in rows %}{% if row[1] == ["월","화","수","목","금"][i] and row[3] == '숙제' %}{{ row[4] }}{% endif %}{% endfor %}"></td>
+                <td><input type="text" name="prepare_{{ ["월","화","수","목","금"][i] }}" value="{% for row in rows %}{% if row[1] == ["월","화","수","목","금"][i] and row[3] == '준비물' %}{{ row[4] }}{% endif %}{% endfor %}"></td>
             </tr>
-            <tr>
-                <td>준비물</td>
-                <td><input type="text" name="prepare_mon"></td>
-                <td><input type="text" name="prepare_tue"></td>
-                <td><input type="text" name="prepare_wed"></td>
-                <td><input type="text" name="prepare_thu"></td>
-                <td><input type="text" name="prepare_fri"></td>
-            </tr>
+            {% endfor %}
         </table>
+
         <br>
-        <button type="submit">저장하기</button>
+        <button type="submit" name="status" value="saved">저장하기 (학부모 미노출)</button>
+        <button type="submit" name="status" value="published">배포하기 (학부모 공개)</button>
     </form>
 </body>
 </html>
