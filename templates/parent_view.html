@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>주간학습안내 보기</title>
+    <link rel="stylesheet" href="/static/styles.css">
+<link rel="manifest" href="/static/manifest.json">
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/static/service-worker.js')
+  .then(function() { console.log("Service Worker Registered"); });
+}
+</script>
+</head>
+<body>
+    <h1>주간학습안내</h1>
+
+    <form method="GET" action="/">
+        주차 선택:
+        <select name="week" onchange="this.form.submit()">
+            {% for w in weeks %}
+            <option value="{{ w }}" {% if w == week %}selected{% endif %}>{{ w }}</option>
+            {% endfor %}
+        </select>
+    </form>
+
+    <br>
+
+    {% for day, categories in data.items() %}
+    <div class="card">
+        <h2>{{ day }}요일</h2>
+        <p><strong>숙제:</strong> {{ categories['숙제'] | join(', ') if categories['숙제'] else "없음" }}</p>
+        <p><strong>준비물:</strong> {{ categories['준비물'] | join(', ') if categories['준비물'] else "없음" }}</p>
+    </div>
+    {% endfor %}
+</body>
+</html>
